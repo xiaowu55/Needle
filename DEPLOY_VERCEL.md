@@ -28,6 +28,8 @@ CRON_SECRET=replace-with-a-long-random-secret
 WEB_PUSH_SUBJECT=mailto:you@example.com
 WEB_PUSH_VAPID_PUBLIC_KEY=...
 WEB_PUSH_VAPID_PRIVATE_KEY=...
+UPSTASH_REDIS_REST_URL=...
+UPSTASH_REDIS_REST_TOKEN=...
 ```
 
 ## 4. Add GitHub Actions secrets
@@ -51,16 +53,17 @@ It runs every 15 minutes and calls:
 
 That gives you much better reminder timing than Vercel Hobby cron.
 
-## 6. Important limitation
+## 6. Redis storage for Vercel
 
-The app still stores push subscriptions and delivery history in local SQLite.
+For Vercel, push subscriptions and delivery history should use Upstash Redis.
 
-That is fine for local/self-hosting, but not reliable for Vercel long term because Vercel is not a persistent local-disk environment.
+This project now supports that directly through:
 
-So for a production-grade Vercel setup, the next migration should be:
+- `UPSTASH_REDIS_REST_URL`
+- `UPSTASH_REDIS_REST_TOKEN`
 
-- move subscription storage out of SQLite
-- use Postgres / Turso / KV / similar external storage
+If those are set, the app stores push subscriptions and heatmap history in Upstash.
+If they are missing, the app falls back to local SQLite for local/self-hosted use.
 
 ## 7. Recommended rollout
 

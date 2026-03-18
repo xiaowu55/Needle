@@ -56,7 +56,9 @@ Steps:
 
 The app now ships with the full 500-album dataset in `data/albums.json`.
 
-Push subscriptions are persisted in a local SQLite database under `data/push-subscriptions.db`.
+Push subscriptions use Upstash Redis when `UPSTASH_REDIS_REST_URL` and
+`UPSTASH_REDIS_REST_TOKEN` are configured. Otherwise the app falls back to the
+local SQLite database under `data/push-subscriptions.db`.
 
 For a single VPS deployment, use the self-hosting guide:
 [`SELF_HOSTING.md`](./SELF_HOSTING.md)

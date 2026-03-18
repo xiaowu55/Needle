@@ -62,8 +62,118 @@ const LEGACY_STORE_FILE = path.join(
   process.env.TMPDIR || "/tmp",
   "album-daily-push-subscriptions.json",
 );
+const UPSTASH_REDIS_REST_URL = process.env.UPSTASH_REDIS_REST_URL;
+const UPSTASH_REDIS_REST_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+const SUBSCRIPTION_INDEX_KEY = "needle:push:subscriptions";
 
 let database: DatabaseSync | null = null;
+
+function hasUpstashConfig() {
+  return Boolean(UPSTASH_REDIS_REST_URL && UPSTASH_REDIS_REST_TOKEN);
+}
+
+function encodeEndpoint(endpoint: string) {
+  return Buffer.from(endpoint).toString("base64url");
+}
+
+function getSubscriptionKey(endpoint: string) {
+  return `needle:push:sub:${encodeEndpoint(endpoint)}`;
+}
+
+function getHistoryKey(endpoint: string) {
+  return `needle:push:hist:${encodeEndpoint(endpoint)}`;
+}
+
+async function upstashRequest(command: Array<string | number>) {
+  if (!UPSTASH_REDIS_REST_URL || !UPSTASH_REDIS_REST_TOKEN) {
+    throw new Error("Missing Upstash Redis REST credentials.");
+  }
+
+  const response = await fetch(UPSTASH_REDIS_REST_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${UPSTASH_REDIS_REST_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(command),
+    cache: "no-store",
+  });
+
+  const payload = (await response.json()) as { result?: unknown; error?: string };
+
+  if (!response.ok || payload.error) {
+    throw new Error(payload.error || "Upstash request failed.");
+  }
+
+  return payload.result;
+}
+
+async function upstashPipeline(commands: Array<Array<string | number>>) {
+  if (!UPSTASH_REDIS_REST_URL || !UPSTASH_REDIS_REST_TOKEN) {
+    throw new Error("Missing Upstash Redis REST credentials.");
+  }
+
+  const response = await fetch(`${UPSTASH_REDIS_REST_URL}/pipeline`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${UPSTASH_REDIS_REST_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(commands),
+    cache: "no-store",
+  });
+
+  const payload = (await response.json()) as Array<{ result?: unknown; error?: string }>;
+
+  if (!response.ok) {
+    throw new Error("Upstash pipeline failed.");
+  }
+
+  return payload;
+}
+
+function parseSubscriptionValue(value: unknown): StoredPushSubscription | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  try {
+    return JSON.parse(value) as StoredPushSubscription;
+  } catch {
+    return null;
+  }
+}
+
+function parseHistoryEntries(result: unknown): PushDeliveryHistoryEntry[] {
+  if (!Array.isArray(result)) {
+    return [];
+  }
+
+  const entries: PushDeliveryHistoryEntry[] = [];
+
+  for (let index = 0; index < result.length; index += 2) {
+    const localDateKey = result[index];
+    const deliveryCount = result[index + 1];
+
+    if (typeof localDateKey !== "string") {
+      continue;
+    }
+
+    const count =
+      typeof deliveryCount === "number"
+        ? deliveryCount
+        : Number.parseInt(String(deliveryCount ?? 0), 10);
+
+    entries.push({
+      endpoint: "",
+      localDateKey,
+      deliveredAt: "",
+      deliveryCount: Number.isFinite(count) ? count : 0,
+    });
+  }
+
+  return entries;
+}
 
 function rowToSubscription(row: SubscriptionRow): StoredPushSubscription {
   return {
@@ -232,6 +342,20 @@ function getDatabase() {
 }
 
 export async function listPushSubscriptions() {
+  if (hasUpstashConfig()) {
+    const members = (await upstashRequest(["SMEMBERS", SUBSCRIPTION_INDEX_KEY])) as string[] | null;
+
+    if (!Array.isArray(members) || members.length === 0) {
+      return [];
+    }
+
+    const rows = await upstashPipeline(members.map((key) => ["GET", key]));
+    return rows
+      .map((row) => parseSubscriptionValue(row.result))
+      .filter((value): value is StoredPushSubscription => Boolean(value))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
   const rows = getDatabase()
     .prepare("SELECT * FROM push_subscriptions ORDER BY createdAt ASC")
     .all() as SubscriptionRow[];
@@ -242,6 +366,28 @@ export async function listPushSubscriptions() {
 export async function upsertPushSubscription(
   subscription: StoredPushSubscription,
 ) {
+  if (hasUpstashConfig()) {
+    const now = new Date().toISOString();
+    const key = getSubscriptionKey(subscription.endpoint);
+    const existing = await getPushSubscriptionByEndpoint(subscription.endpoint);
+
+    const nextValue: StoredPushSubscription = {
+      ...subscription,
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+      lastSentLocalDateKey: existing?.lastSentLocalDateKey,
+      lastSentAt: existing?.lastSentAt,
+      sentCount: existing?.sentCount || 0,
+    };
+
+    await upstashPipeline([
+      ["SET", key, JSON.stringify(nextValue)],
+      ["SADD", SUBSCRIPTION_INDEX_KEY, key],
+    ]);
+
+    return nextValue;
+  }
+
   const db = getDatabase();
   const now = new Date().toISOString();
   const existing = db
@@ -303,6 +449,18 @@ export async function upsertPushSubscription(
 }
 
 export async function removePushSubscription(endpoint: string) {
+  if (hasUpstashConfig()) {
+    const key = getSubscriptionKey(endpoint);
+    const historyKey = getHistoryKey(endpoint);
+
+    await upstashPipeline([
+      ["DEL", key],
+      ["DEL", historyKey],
+      ["SREM", SUBSCRIPTION_INDEX_KEY, key],
+    ]);
+    return;
+  }
+
   getDatabase()
     .prepare("DELETE FROM push_subscriptions WHERE endpoint = ?")
     .run(endpoint);
@@ -312,6 +470,29 @@ export async function markPushSubscriptionSent(
   endpoint: string,
   localDateKey: string,
 ) {
+  if (hasUpstashConfig()) {
+    const existing = await getPushSubscriptionByEndpoint(endpoint);
+
+    if (!existing) {
+      return;
+    }
+
+    const deliveredAt = new Date().toISOString();
+    const nextValue: StoredPushSubscription = {
+      ...existing,
+      updatedAt: deliveredAt,
+      lastSentLocalDateKey: localDateKey,
+      lastSentAt: deliveredAt,
+      sentCount: existing.sentCount + 1,
+    };
+
+    await upstashPipeline([
+      ["SET", getSubscriptionKey(endpoint), JSON.stringify(nextValue)],
+      ["HINCRBY", getHistoryKey(endpoint), localDateKey, 1],
+    ]);
+    return;
+  }
+
   const db = getDatabase();
   const deliveredAt = new Date().toISOString();
   db.prepare(`
@@ -334,6 +515,11 @@ export async function markPushSubscriptionSent(
 }
 
 export async function getPushSubscriptionByEndpoint(endpoint: string) {
+  if (hasUpstashConfig()) {
+    const result = await upstashRequest(["GET", getSubscriptionKey(endpoint)]);
+    return parseSubscriptionValue(result);
+  }
+
   const row = getDatabase()
     .prepare("SELECT * FROM push_subscriptions WHERE endpoint = ?")
     .get(endpoint) as SubscriptionRow | undefined;
@@ -342,6 +528,24 @@ export async function getPushSubscriptionByEndpoint(endpoint: string) {
 }
 
 export async function removeAllPushSubscriptions() {
+  if (hasUpstashConfig()) {
+    const subscriptions = await listPushSubscriptions();
+
+    if (subscriptions.length === 0) {
+      return;
+    }
+
+    const commands: Array<Array<string | number>> = [["DEL", SUBSCRIPTION_INDEX_KEY]];
+
+    for (const subscription of subscriptions) {
+      commands.push(["DEL", getSubscriptionKey(subscription.endpoint)]);
+      commands.push(["DEL", getHistoryKey(subscription.endpoint)]);
+    }
+
+    await upstashPipeline(commands);
+    return;
+  }
+
   getDatabase().prepare("DELETE FROM push_subscriptions").run();
   if (existsSync(LEGACY_STORE_FILE)) {
     unlinkSync(LEGACY_STORE_FILE);
@@ -352,6 +556,14 @@ export async function listRecentPushDeliveryHistory(
   endpoint: string,
   limit = 30,
 ) {
+  if (hasUpstashConfig()) {
+    const result = await upstashRequest(["HGETALL", getHistoryKey(endpoint)]);
+    return parseHistoryEntries(result)
+      .map((entry) => ({ ...entry, endpoint }))
+      .sort((a, b) => a.localDateKey.localeCompare(b.localDateKey))
+      .slice(-limit);
+  }
+
   const rows = getDatabase()
     .prepare(`
       SELECT endpoint, localDateKey, deliveredAt
