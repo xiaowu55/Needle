@@ -1,0 +1,1 @@
+*/15 * * * * curl -fsS -H "Authorization: Bearer REPLACE_WITH_CRON_SECRET" https://your-domain.com/api/cron/push-notifications >/dev/null
