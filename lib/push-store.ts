@@ -1,7 +1,3 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync } from "node:fs";
-import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
-
 export type PushSchedule = {
   frequency: "daily" | "weekly" | "interval";
   hour: number;
@@ -56,20 +52,48 @@ type DeliveryHistoryRow = {
   deliveryCount: number;
 };
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const DB_FILE = path.join(DATA_DIR, "push-subscriptions.db");
-const LEGACY_STORE_FILE = path.join(
-  process.env.TMPDIR || "/tmp",
-  "album-daily-push-subscriptions.json",
-);
 const UPSTASH_REDIS_REST_URL = process.env.UPSTASH_REDIS_REST_URL;
 const UPSTASH_REDIS_REST_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const SUBSCRIPTION_INDEX_KEY = "needle:push:subscriptions";
+type NodeFsModule = typeof import("node:fs");
+type NodePathModule = typeof import("node:path");
+type NodeSqliteModule = typeof import("node:sqlite");
+type DatabaseSync = InstanceType<NodeSqliteModule["DatabaseSync"]>;
 
 let database: DatabaseSync | null = null;
+let nodeStorageModulesPromise:
+  | Promise<{
+      fs: NodeFsModule;
+      path: NodePathModule;
+      sqlite: NodeSqliteModule;
+    }>
+  | null = null;
 
 function hasUpstashConfig() {
   return Boolean(UPSTASH_REDIS_REST_URL && UPSTASH_REDIS_REST_TOKEN);
+}
+
+async function getNodeStorageModules() {
+  if (!nodeStorageModulesPromise) {
+    nodeStorageModulesPromise = (async () => {
+      try {
+        const [fs, path, sqlite] = await Promise.all([
+          import("node:fs"),
+          import("node:path"),
+          import("node:sqlite"),
+        ]);
+
+        return { fs, path, sqlite };
+      } catch (error) {
+        throw new Error(
+          "Local push storage is unavailable in this runtime. Configure UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN for Cloudflare deployments.",
+          { cause: error },
+        );
+      }
+    })();
+  }
+
+  return nodeStorageModulesPromise;
 }
 
 function encodeEndpoint(endpoint: string) {
@@ -204,13 +228,19 @@ function rowToSubscription(row: SubscriptionRow): StoredPushSubscription {
   };
 }
 
-function migrateLegacyJson(db: DatabaseSync) {
-  if (!existsSync(LEGACY_STORE_FILE)) {
+async function migrateLegacyJson(db: DatabaseSync) {
+  const { fs, path } = await getNodeStorageModules();
+  const legacyStoreFile = path.join(
+    process.env.TMPDIR || "/tmp",
+    "album-daily-push-subscriptions.json",
+  );
+
+  if (!fs.existsSync(legacyStoreFile)) {
     return;
   }
 
   try {
-    const rawValue = readFileSync(LEGACY_STORE_FILE, "utf8");
+    const rawValue = fs.readFileSync(legacyStoreFile, "utf8");
     const parsed = JSON.parse(rawValue) as unknown;
 
     if (!Array.isArray(parsed)) {
@@ -270,19 +300,23 @@ function migrateLegacyJson(db: DatabaseSync) {
     };
 
     migrate(parsed as StoredPushSubscription[]);
-    renameSync(LEGACY_STORE_FILE, `${LEGACY_STORE_FILE}.migrated`);
+    fs.renameSync(legacyStoreFile, `${legacyStoreFile}.migrated`);
   } catch {
     // Keep the legacy file in place if migration fails.
   }
 }
 
-function getDatabase() {
+async function getDatabase() {
   if (database) {
     return database;
   }
 
-  mkdirSync(DATA_DIR, { recursive: true });
-  const db = new DatabaseSync(DB_FILE);
+  const { fs, path, sqlite } = await getNodeStorageModules();
+  const dataDir = path.join(process.cwd(), "data");
+  const dbFile = path.join(dataDir, "push-subscriptions.db");
+
+  fs.mkdirSync(dataDir, { recursive: true });
+  const db = new sqlite.DatabaseSync(dbFile);
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -342,7 +376,7 @@ function getDatabase() {
     `);
   }
 
-  migrateLegacyJson(db);
+  await migrateLegacyJson(db);
   database = db;
   return database;
 }
@@ -362,7 +396,7 @@ export async function listPushSubscriptions() {
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
-  const rows = getDatabase()
+  const rows = (await getDatabase())
     .prepare("SELECT * FROM push_subscriptions ORDER BY createdAt ASC")
     .all() as SubscriptionRow[];
 
@@ -394,7 +428,7 @@ export async function upsertPushSubscription(
     return nextValue;
   }
 
-  const db = getDatabase();
+  const db = await getDatabase();
   const now = new Date().toISOString();
   const existing = db
     .prepare(
@@ -467,7 +501,7 @@ export async function removePushSubscription(endpoint: string) {
     return;
   }
 
-  getDatabase()
+  (await getDatabase())
     .prepare("DELETE FROM push_subscriptions WHERE endpoint = ?")
     .run(endpoint);
 }
@@ -499,7 +533,7 @@ export async function markPushSubscriptionSent(
     return;
   }
 
-  const db = getDatabase();
+  const db = await getDatabase();
   const deliveredAt = new Date().toISOString();
   db.prepare(`
     INSERT INTO push_delivery_history (
@@ -526,7 +560,7 @@ export async function getPushSubscriptionByEndpoint(endpoint: string) {
     return parseSubscriptionValue(result);
   }
 
-  const row = getDatabase()
+  const row = (await getDatabase())
     .prepare("SELECT * FROM push_subscriptions WHERE endpoint = ?")
     .get(endpoint) as SubscriptionRow | undefined;
 
@@ -552,9 +586,16 @@ export async function removeAllPushSubscriptions() {
     return;
   }
 
-  getDatabase().prepare("DELETE FROM push_subscriptions").run();
-  if (existsSync(LEGACY_STORE_FILE)) {
-    unlinkSync(LEGACY_STORE_FILE);
+  (await getDatabase()).prepare("DELETE FROM push_subscriptions").run();
+
+  const { fs, path } = await getNodeStorageModules();
+  const legacyStoreFile = path.join(
+    process.env.TMPDIR || "/tmp",
+    "album-daily-push-subscriptions.json",
+  );
+
+  if (fs.existsSync(legacyStoreFile)) {
+    fs.unlinkSync(legacyStoreFile);
   }
 }
 
@@ -570,7 +611,7 @@ export async function listRecentPushDeliveryHistory(
       .slice(-limit);
   }
 
-  const rows = getDatabase()
+  const rows = (await getDatabase())
     .prepare(`
       SELECT endpoint, localDateKey, deliveredAt
            , deliveryCount

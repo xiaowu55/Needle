@@ -7,10 +7,23 @@ import {
   markPushSubscriptionSent,
   removePushSubscription,
 } from "@/lib/push-store";
+import { hasPushWorkerProxy, proxyPushWorkerRequest } from "@/lib/push-worker-proxy";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  if (hasPushWorkerProxy()) {
+    const response = await proxyPushWorkerRequest("/api/cron/push-notifications", {
+      method: "GET",
+      headers: {
+        authorization: request.headers.get("authorization") || "",
+      },
+    });
+
+    const payload = await response.json();
+    return NextResponse.json(payload, { status: response.status });
+  }
+
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = request.headers.get("authorization");
 

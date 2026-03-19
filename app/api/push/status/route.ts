@@ -3,6 +3,7 @@ import {
   getPushSubscriptionByEndpoint,
   listRecentPushDeliveryHistory,
 } from "@/lib/push-store";
+import { hasPushWorkerProxy, proxyPushWorkerRequest } from "@/lib/push-worker-proxy";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,20 @@ type PushStatusBody = {
 };
 
 export async function POST(request: NextRequest) {
+  if (hasPushWorkerProxy()) {
+    const body = await request.text();
+    const response = await proxyPushWorkerRequest("/api/push/status", {
+      method: "POST",
+      body,
+      headers: {
+        "content-type": "application/json",
+      },
+    });
+
+    const payload = await response.json();
+    return NextResponse.json(payload, { status: response.status });
+  }
+
   const body = (await request.json()) as PushStatusBody;
 
   if (!body.endpoint) {

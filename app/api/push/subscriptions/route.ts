@@ -4,6 +4,7 @@ import {
   upsertPushSubscription,
   type PushSchedule,
 } from "@/lib/push-store";
+import { hasPushWorkerProxy, proxyPushWorkerRequest } from "@/lib/push-worker-proxy";
 
 type SubscribeBody = {
   subscription: {
@@ -35,6 +36,20 @@ function normalizeSchedule(input: SubscribeBody["schedule"]): PushSchedule {
 }
 
 export async function POST(request: NextRequest) {
+  if (hasPushWorkerProxy()) {
+    const body = await request.text();
+    const response = await proxyPushWorkerRequest("/api/push/subscriptions", {
+      method: "POST",
+      body,
+      headers: {
+        "content-type": "application/json",
+      },
+    });
+
+    const payload = await response.json();
+    return NextResponse.json(payload, { status: response.status });
+  }
+
   try {
     const body = (await request.json()) as SubscribeBody;
     const endpoint = body.subscription?.endpoint;
@@ -68,6 +83,20 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  if (hasPushWorkerProxy()) {
+    const body = await request.text();
+    const response = await proxyPushWorkerRequest("/api/push/subscriptions", {
+      method: "DELETE",
+      body,
+      headers: {
+        "content-type": "application/json",
+      },
+    });
+
+    const payload = await response.json();
+    return NextResponse.json(payload, { status: response.status });
+  }
+
   try {
     const body = (await request.json()) as { endpoint?: string };
 

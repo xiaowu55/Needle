@@ -27,6 +27,7 @@ Then open `http://localhost:3000`.
 Copy `.env.example` to `.env.local` and fill in the values you need.
 
 - `ALBUM_TIMEZONE`: timezone used to determine "today"
+- `PUSH_WORKER_API_URL`: optional Cloudflare Worker base URL used for push APIs
 - `CRON_SECRET`: bearer token for the cron endpoint
 - `WEB_PUSH_SUBJECT`: contact URI for VAPID, usually `mailto:you@example.com`
 - `WEB_PUSH_VAPID_PUBLIC_KEY`: public key used by the browser PushManager
@@ -56,9 +57,11 @@ Steps:
 
 The app now ships with the full 500-album dataset in `data/albums.json`.
 
-Push subscriptions use Upstash Redis when `UPSTASH_REDIS_REST_URL` and
-`UPSTASH_REDIS_REST_TOKEN` are configured. Otherwise the app falls back to the
-local SQLite database under `data/push-subscriptions.db`.
+Push subscriptions can be handled three ways:
+
+- recommended: Cloudflare Worker + D1 via `PUSH_WORKER_API_URL`
+- legacy Vercel setup: Upstash Redis via `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`
+- local/self-hosted fallback: local SQLite under `data/push-subscriptions.db`
 
 For a single VPS deployment, use the self-hosting guide:
 [`SELF_HOSTING.md`](./SELF_HOSTING.md)
