@@ -35,40 +35,50 @@ function normalizeSchedule(input: SubscribeBody["schedule"]): PushSchedule {
 }
 
 export async function POST(request: NextRequest) {
-  const body = (await request.json()) as SubscribeBody;
-  const endpoint = body.subscription?.endpoint;
-  const auth = body.subscription?.keys?.auth;
-  const p256dh = body.subscription?.keys?.p256dh;
+  try {
+    const body = (await request.json()) as SubscribeBody;
+    const endpoint = body.subscription?.endpoint;
+    const auth = body.subscription?.keys?.auth;
+    const p256dh = body.subscription?.keys?.p256dh;
 
-  if (!endpoint || !auth || !p256dh) {
-    return NextResponse.json({ error: "Invalid subscription." }, { status: 400 });
+    if (!endpoint || !auth || !p256dh) {
+      return NextResponse.json({ error: "Invalid subscription." }, { status: 400 });
+    }
+
+    const subscription = await upsertPushSubscription({
+      endpoint,
+      keys: {
+        auth,
+        p256dh,
+      },
+      schedule: normalizeSchedule(body.schedule),
+      createdAt: "",
+      updatedAt: "",
+      sentCount: 0,
+    });
+
+    return NextResponse.json({
+      ok: true,
+      subscription,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to save push subscription.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  const subscription = await upsertPushSubscription({
-    endpoint,
-    keys: {
-      auth,
-      p256dh,
-    },
-    schedule: normalizeSchedule(body.schedule),
-    createdAt: "",
-    updatedAt: "",
-    sentCount: 0,
-  });
-
-  return NextResponse.json({
-    ok: true,
-    subscription,
-  });
 }
 
 export async function DELETE(request: NextRequest) {
-  const body = (await request.json()) as { endpoint?: string };
+  try {
+    const body = (await request.json()) as { endpoint?: string };
 
-  if (!body.endpoint) {
-    return NextResponse.json({ error: "Missing endpoint." }, { status: 400 });
+    if (!body.endpoint) {
+      return NextResponse.json({ error: "Missing endpoint." }, { status: 400 });
+    }
+
+    await removePushSubscription(body.endpoint);
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to remove push subscription.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  await removePushSubscription(body.endpoint);
-  return NextResponse.json({ ok: true });
 }

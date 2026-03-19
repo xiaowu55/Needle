@@ -129,6 +129,12 @@ async function upstashPipeline(commands: Array<Array<string | number>>) {
     throw new Error("Upstash pipeline failed.");
   }
 
+  const firstError = payload.find((entry) => entry.error)?.error;
+
+  if (firstError) {
+    throw new Error(firstError);
+  }
+
   return payload;
 }
 

@@ -166,7 +166,7 @@ export function PushSettings() {
           applicationServerKey: urlBase64ToUint8Array(publicKey),
         }));
 
-      await fetch("/api/push/subscriptions", {
+      const response = await fetch("/api/push/subscriptions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -183,10 +183,18 @@ export function PushSettings() {
         }),
       });
 
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error || "保存推送订阅失败。");
+      }
+
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(form));
       setSubscriptionEndpoint(subscription.endpoint);
       setStatus("推送提醒已更新。");
       await loadPushStatus(subscription.endpoint);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "保存推送订阅失败。";
+      setStatus(message);
     } finally {
       setIsSaving(false);
     }
@@ -201,7 +209,7 @@ export function PushSettings() {
       return;
     }
 
-    await fetch("/api/push/subscriptions", {
+    const response = await fetch("/api/push/subscriptions", {
       method: "DELETE",
       headers: {
         "Content-Type": "application/json",
@@ -210,6 +218,12 @@ export function PushSettings() {
         endpoint: subscription.endpoint,
       }),
     });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      setStatus(payload?.error || "关闭推送提醒失败。");
+      return;
+    }
 
     await subscription.unsubscribe();
     window.localStorage.removeItem(STORAGE_KEY);
