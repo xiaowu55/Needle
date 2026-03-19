@@ -8,6 +8,8 @@ type DateParts = {
   dateKey: string;
 };
 
+const DAILY_WEEKLY_GRACE_MINUTES = 30;
+
 function getDateParts(date: Date, timeZone: string): DateParts {
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone,
@@ -71,22 +73,14 @@ export function isSubscriptionDue(
   now = new Date(),
 ) {
   const localNow = getDateParts(now, subscription.schedule.timeZone);
+  const currentMinuteOfDay = localNow.hour * 60 + localNow.minute;
+  const scheduledMinuteOfDay =
+    subscription.schedule.hour * 60 + subscription.schedule.minute;
 
   if (
     subscription.schedule.frequency !== "interval" &&
     subscription.lastSentLocalDateKey === localNow.dateKey
   ) {
-    return {
-      due: false,
-      localDateKey: localNow.dateKey,
-    };
-  }
-
-  const matchesTime =
-    localNow.hour === subscription.schedule.hour &&
-    localNow.minute === subscription.schedule.minute;
-
-  if (!matchesTime) {
     return {
       due: false,
       localDateKey: localNow.dateKey,
@@ -108,6 +102,17 @@ export function isSubscriptionDue(
 
     return {
       due: elapsedMs >= intervalMs,
+      localDateKey: localNow.dateKey,
+    };
+  }
+
+  const withinGraceWindow =
+    currentMinuteOfDay >= scheduledMinuteOfDay &&
+    currentMinuteOfDay <= scheduledMinuteOfDay + DAILY_WEEKLY_GRACE_MINUTES;
+
+  if (!withinGraceWindow) {
+    return {
+      due: false,
       localDateKey: localNow.dateKey,
     };
   }
