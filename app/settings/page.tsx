@@ -1,9 +1,12 @@
+import { CustomLibrarySettings } from "@/components/custom-library-settings";
 import Link from "next/link";
 import { FavoritesLink } from "@/components/favorites-link";
 import { MusicPlatformSettings } from "@/components/music-platform-settings";
 import { PushSettings } from "@/components/push-settings";
 
 export const dynamic = "force-dynamic";
+
+const timeZone = process.env.ALBUM_TIMEZONE || "Asia/Shanghai";
 
 export default function SettingsPage() {
   return (
@@ -26,22 +29,7 @@ export default function SettingsPage() {
 
         <MusicPlatformSettings />
         <PushSettings />
-
-        <section className="push-panel">
-          <div className="push-panel-copy">
-            <p className="editor-kicker">Coming next</p>
-            <h2 className="push-panel-title">导入自己的专辑列表</h2>
-            <p className="push-panel-text">
-              后续允许导入你自己的想听专辑，不再局限于 Rolling Stone Top 500。
-            </p>
-          </div>
-
-          <div className="poster-actions push-actions">
-            <button type="button" className="editor-button" disabled>
-              即将开放
-            </button>
-          </div>
-        </section>
+        <CustomLibrarySettings timeZone={timeZone} />
       </section>
     </main>
   );

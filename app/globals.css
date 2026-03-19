@@ -153,6 +153,14 @@ a {
   text-transform: uppercase;
 }
 
+.custom-source-mark {
+  margin: 0;
+  font-size: clamp(3.6rem, 14vw, 6rem);
+  line-height: 0.9;
+  font-weight: 900;
+  letter-spacing: -0.08em;
+}
+
 .home-hero,
 .detail-hero {
   display: grid;
@@ -453,13 +461,20 @@ a {
 }
 
 .push-field input,
-.push-field select {
+.push-field select,
+.editor-textarea {
   min-height: 48px;
   padding: 0 14px;
   border: 2px solid var(--line);
   background: rgba(255, 255, 255, 0.66);
   font: inherit;
   color: var(--ink);
+}
+
+.editor-textarea {
+  min-height: 180px;
+  padding: 14px;
+  resize: vertical;
 }
 
 .push-actions {
@@ -517,6 +532,100 @@ a {
 .push-history-legend .push-history-cell {
   width: 12px;
   min-width: 12px;
+}
+
+.library-section-title,
+.custom-cover-title {
+  margin: 0;
+  font-family: var(--font-serif);
+}
+
+.library-section-title {
+  font-size: clamp(1.4rem, 5vw, 1.9rem);
+  line-height: 1;
+}
+
+.library-preview,
+.library-list-block {
+  display: grid;
+  gap: 12px;
+}
+
+.library-preview-stack,
+.library-preview-rejected,
+.library-list {
+  display: grid;
+  gap: 10px;
+}
+
+.library-preview-item,
+.library-item {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 2px solid var(--line);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.library-preview-item.rejected {
+  border-style: dashed;
+}
+
+.library-preview-item strong,
+.library-item-copy strong {
+  font-size: 0.98rem;
+}
+
+.library-preview-item span,
+.library-item-copy span {
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.library-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.library-item-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.library-item-button {
+  min-height: 44px;
+  min-width: 88px;
+}
+
+.custom-cover-frame {
+  display: grid;
+  place-items: stretch;
+}
+
+.custom-cover-card {
+  display: grid;
+  align-content: space-between;
+  gap: 14px;
+  min-height: 100%;
+  padding: 24px;
+  background:
+    linear-gradient(135deg, rgba(17, 17, 17, 0.08), rgba(17, 17, 17, 0.18)),
+    var(--paper-strong);
+}
+
+.custom-cover-title {
+  font-size: clamp(2rem, 7vw, 2.8rem);
+  line-height: 0.95;
+}
+
+.custom-cover-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.45;
 }
 
 @media (min-width: 900px) {
