@@ -128,6 +128,6 @@ curl -H "Authorization: Bearer <your-secret>" \
 
 ## Notes
 
-- Self-hosting is a better fit than Vercel for the current SQLite-based push store.
-- If you later scale beyond one server, move push subscriptions and delivery history out of SQLite.
+- Self-hosting keeps push subscriptions in local SQLite on the same server.
+- Hosted deployments should prefer the Cloudflare Worker + D1 push backend instead.
 - PWA install and Web Push both work much more reliably behind real HTTPS than on LAN IPs.

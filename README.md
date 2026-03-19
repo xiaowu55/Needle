@@ -27,7 +27,7 @@ Then open `http://localhost:3000`.
 Copy `.env.example` to `.env.local` and fill in the values you need.
 
 - `ALBUM_TIMEZONE`: timezone used to determine "today"
-- `PUSH_WORKER_API_URL`: optional Cloudflare Worker base URL used for push APIs
+- `PUSH_WORKER_API_URL`: Cloudflare Worker base URL used for push APIs in hosted deployments
 - `CRON_SECRET`: bearer token for the cron endpoint
 - `WEB_PUSH_SUBJECT`: contact URI for VAPID, usually `mailto:you@example.com`
 - `WEB_PUSH_VAPID_PUBLIC_KEY`: public key used by the browser PushManager
@@ -57,19 +57,18 @@ Steps:
 
 The app now ships with the full 500-album dataset in `data/albums.json`.
 
-Push subscriptions can be handled three ways:
+Push subscriptions now use one of these paths:
 
-- recommended: Cloudflare Worker + D1 via `PUSH_WORKER_API_URL`
-- legacy Vercel setup: Upstash Redis via `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`
-- local/self-hosted fallback: local SQLite under `data/push-subscriptions.db`
+- hosted deployments: Cloudflare Worker + D1 via `PUSH_WORKER_API_URL`
+- local/self-hosted development: local SQLite under `data/push-subscriptions.db`
 
 For a single VPS deployment, use the self-hosting guide:
 [`SELF_HOSTING.md`](./SELF_HOSTING.md)
 
-For Vercel hosting with GitHub Actions triggering reminder checks:
+For Vercel hosting with a Cloudflare Worker push backend:
 [`DEPLOY_VERCEL.md`](./DEPLOY_VERCEL.md)
 
-For better reminder timing with Cloudflare Workers Cron:
+For the dedicated Cloudflare push worker:
 [`DEPLOY_CLOUDFLARE_WORKER.md`](./DEPLOY_CLOUDFLARE_WORKER.md)
 
 ## Local push test

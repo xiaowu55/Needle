@@ -109,8 +109,8 @@ curl -H "Authorization: Bearer YOUR_CRON_SECRET" \
 
 Once the Worker cron is live:
 
-- disable the GitHub Actions cron workflow
-- remove Upstash env vars from Vercel if you no longer need the old backend
+- remove any obsolete cron setup from your hosting platform
+- remove any old push-storage env vars you no longer use
 
 ## 8. Why this is better than GitHub Actions
 
