@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { PushDeliveryHeatmap } from "@/components/push-delivery-heatmap";
 
 type ScheduleForm = {
-  frequency: "daily" | "weekly";
+  frequency: "daily" | "weekly" | "interval";
   time: string;
   weekday: string;
   intervalHours: string;
@@ -108,7 +108,10 @@ export function PushSettings() {
         setForm({
           ...DEFAULT_FORM,
           ...saved,
-          frequency: saved.frequency === "weekly" ? "weekly" : "daily",
+          frequency:
+            saved.frequency === "weekly" || saved.frequency === "interval"
+              ? saved.frequency
+              : "daily",
         });
       } catch {
         setForm(DEFAULT_FORM);
@@ -129,7 +132,7 @@ export function PushSettings() {
       const existingSubscription = await registration.pushManager.getSubscription();
       if (existingSubscription) {
         setSubscriptionEndpoint(existingSubscription.endpoint);
-        setStatus("推送已订阅，可修改时间与周期。");
+        setStatus("推送已订阅，可修改时间、周期与重复间隔。");
         await loadPushStatus(existingSubscription.endpoint);
       } else {
         await loadPushStatus();
@@ -268,23 +271,45 @@ export function PushSettings() {
                 >
                   <option value="daily">每天</option>
                   <option value="weekly">每周</option>
+                  <option value="interval">每隔几小时</option>
                 </select>
               </label>
 
-            <label className="push-field">
-              <span>时间</span>
-              <input
-                type="time"
-                step={900}
-                value={form.time}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    time: event.target.value,
-                  }))
-                }
+            {form.frequency === "interval" ? (
+              <label className="push-field">
+                <span>间隔</span>
+                <select
+                  value={form.intervalHours}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      intervalHours: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="3">每 3 小时</option>
+                  <option value="6">每 6 小时</option>
+                  <option value="8">每 8 小时</option>
+                  <option value="12">每 12 小时</option>
+                  <option value="24">每 24 小时</option>
+                </select>
+              </label>
+            ) : (
+              <label className="push-field">
+                <span>时间</span>
+                <input
+                  type="time"
+                  step={900}
+                  value={form.time}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      time: event.target.value,
+                    }))
+                  }
                 />
               </label>
+            )}
 
             {form.frequency === "weekly" ? (
               <label className="push-field">
