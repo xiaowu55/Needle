@@ -1,0 +1,9 @@
+name = "needle-push-cron"
+main = "worker.js"
+compatibility_date = "2026-03-19"
+
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+APP_URL = "https://your-project.vercel.app"

@@ -6,3 +6,5 @@ dist
 tsconfig.tsbuildinfo
 data/*.db
 data/*.db-*
+cloudflare/.wrangler
+cloudflare/wrangler.toml

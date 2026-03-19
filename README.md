@@ -66,6 +66,9 @@ For a single VPS deployment, use the self-hosting guide:
 For Vercel hosting with GitHub Actions triggering reminder checks:
 [`DEPLOY_VERCEL.md`](./DEPLOY_VERCEL.md)
 
+For better reminder timing with Cloudflare Workers Cron:
+[`DEPLOY_CLOUDFLARE_WORKER.md`](./DEPLOY_CLOUDFLARE_WORKER.md)
+
 ## Local push test
 
 1. Start the app with `bun run dev`.
