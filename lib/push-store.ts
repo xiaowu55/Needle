@@ -389,6 +389,28 @@ export async function removeAllPushSubscriptions() {
   }
 }
 
+export async function resetAllPushSubscriptionProgress() {
+  const db = await getDatabase();
+
+  db.exec("BEGIN");
+
+  try {
+    db.prepare(`
+      UPDATE push_subscriptions
+      SET lastSentLocalDateKey = NULL,
+          lastSentAt = NULL,
+          sentCount = 0,
+          updatedAt = ?
+    `).run(new Date().toISOString());
+
+    db.prepare("DELETE FROM push_delivery_history").run();
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
 export async function listRecentPushDeliveryHistory(
   endpoint: string,
   limit = 30,

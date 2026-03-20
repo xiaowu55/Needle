@@ -43,6 +43,19 @@ function getDateKey(date: Date, timeZone: string) {
   }).format(date);
 }
 
+function parseDateKey(dateKey: string) {
+  const [year, month, day] = dateKey.split("-").map((value) => Number.parseInt(value, 10));
+  return {
+    year,
+    month,
+    day,
+  };
+}
+
+function getSequenceStartDateKey() {
+  return process.env.ALBUM_SEQUENCE_START_DATE || "2026-03-20";
+}
+
 function hashDateKey(dateKey: string) {
   return dateKey.split("-").reduce((sum, part) => sum + Number(part), 0);
 }
@@ -138,7 +151,17 @@ export function getAlbumForDate(date = new Date(), timeZone = "UTC") {
   }
 
   const dateKey = getDateKey(date, timeZone);
-  const index = hashDateKey(dateKey) % list.length;
+  const startDateKey = getSequenceStartDateKey();
+  const current = parseDateKey(dateKey);
+  const start = parseDateKey(startDateKey);
+  const elapsedDays = Math.floor(
+    (
+      Date.UTC(current.year, current.month - 1, current.day) -
+      Date.UTC(start.year, start.month - 1, start.day)
+    ) / (1000 * 60 * 60 * 24),
+  );
+  const sequence = Math.max(0, elapsedDays);
+  const index = sequence % list.length;
 
   return {
     album: list[index],

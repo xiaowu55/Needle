@@ -529,6 +529,30 @@ async function runPushNotifications(env, authHeader) {
   });
 }
 
+async function resetPushProgress(env, authHeader) {
+  if (env.CRON_SECRET && authHeader !== `Bearer ${env.CRON_SECRET}`) {
+    return jsonResponse({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const updatedAt = new Date().toISOString();
+
+  await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE push_subscriptions
+       SET last_sent_local_date_key = NULL,
+           last_sent_at = NULL,
+           sent_count = 0,
+           updated_at = ?1`,
+    ).bind(updatedAt),
+    env.DB.prepare("DELETE FROM push_delivery_history"),
+  ]);
+
+  return jsonResponse({
+    ok: true,
+    reset: true,
+  });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -564,6 +588,10 @@ export default {
 
       if (url.pathname === "/api/cron/push-notifications") {
         return runPushNotifications(env, request.headers.get("authorization"));
+      }
+
+      if (url.pathname === "/api/cron/reset-push-progress" && request.method === "POST") {
+        return resetPushProgress(env, request.headers.get("authorization"));
       }
 
       return textResponse("Not found", { status: 404 });
