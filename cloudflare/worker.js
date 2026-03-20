@@ -110,6 +110,20 @@ function getAlbumForDate(date = new Date(), timeZone = "UTC") {
   };
 }
 
+function getAlbumForSequence(sequence = 0) {
+  if (!Array.isArray(albums) || albums.length === 0) {
+    throw new Error("Album list is empty.");
+  }
+
+  const normalizedSequence = Number.isFinite(sequence) ? Math.max(0, sequence) : 0;
+  const index = normalizedSequence % albums.length;
+
+  return {
+    album: albums[index],
+    index,
+  };
+}
+
 function getAlbumDetailHref(rank) {
   return `/albums/${rank}`;
 }
@@ -469,7 +483,7 @@ async function runPushNotifications(env, authHeader) {
       continue;
     }
 
-    const { album } = getAlbumForDate(new Date(), subscription.schedule.timeZone);
+    const { album } = getAlbumForSequence(subscription.sentCount);
     const payload = {
       title: `继续听 ${album.album}`,
       body: `${album.artist} · #${album.rank} · 点开继续读这张专辑`,

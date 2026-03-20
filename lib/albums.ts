@@ -146,3 +146,19 @@ export function getAlbumForDate(date = new Date(), timeZone = "UTC") {
     index,
   };
 }
+
+export function getAlbumForSequence(sequence = 0) {
+  const list = getAlbumList();
+
+  if (list.length === 0) {
+    throw new Error("Album list is empty.");
+  }
+
+  const normalizedSequence = Number.isFinite(sequence) ? Math.max(0, sequence) : 0;
+  const index = normalizedSequence % list.length;
+
+  return {
+    album: list[index],
+    index,
+  };
+}

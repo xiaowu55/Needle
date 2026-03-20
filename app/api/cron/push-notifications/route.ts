@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAlbumDetailHref, getAlbumForDate } from "@/lib/albums";
+import { getAlbumDetailHref, getAlbumForSequence } from "@/lib/albums";
 import { getAlbumCoverUrl } from "@/lib/covers";
 import { hasPushConfiguration, isSubscriptionDue, sendPushNotification } from "@/lib/push";
 import {
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
       continue;
     }
 
-    const { album } = getAlbumForDate(new Date(), subscription.schedule.timeZone);
+    const { album } = getAlbumForSequence(subscription.sentCount);
     const coverUrl = await getAlbumCoverUrl(album);
     const payload = {
       title: `继续听 ${album.album}`,
